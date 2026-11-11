@@ -1,7 +1,17 @@
+# Local Python caches and environments
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
+venv/
 .ipynb_checkpoints/
-data/*.csv
-*.joblib
+.pytest_cache/
 .DS_Store
+# Never commit training data (source CSV is large; dataset license applies)
+/data/*
+!/data/README.md
+!/data/download_data.py
+# Model artifacts are recreated on demand
+*.joblib
+*.pkl
+# Temporary logs and experiment scratch
+*.log
