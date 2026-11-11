@@ -1,0 +1,13 @@
+feature_or_group,default_policy,temporal_availability,evidence_or_reason,required_action
+LATITUDE / LONGITUDE / STATE,included,Fire-location fields at discovery,Original wildfire incident records,Confirm coordinates represent discovery location
+DISCOVERY_DATE,included_as_cyclical_day,Discovery date known at report,Incident discovery timestamp,Check timezone and recording practices
+Elevation / Slope / Aspect / TRI / TPI,included,Physical terrain essentially static,Topography products in FPA FOD-Attributes,Document raster vintage and resolution
+GHM,included,Human modification index originally published before 2020,Dataset source Kennedy et al. 2019,Verify spatial product version
+Land_Cover,included,Land-cover layer dates include 2019,Source land cover products,Confirm row-specific dataset layer selection
+EVH / EVC,retrospective_only,Possible 2020 snapshot may postdate ignition,Vegetation layers include 2020,Only include in operational benchmark with proven as-of snapshot
+Annual_precipitation / Aridity_index,retrospective_only,Exact reference period may contain future information,Climatological source details require validation,Verify source years before moving to conservative policy
+vpd_Normal / tmmx_Normal / pr_Normal / erc_Normal,retrospective_only,Climate normals include data through 2020,gridMET climate normals cover 1990-2020 in dataset paper,Use normals constructed only from pre-2020 data for true prospective evaluation
+pr / vpd / tmmx / erc,included_never,Potential full ignition-day reanalysis not known at initial report,Daily observed weather fields,Use time-stamped weather forecasts or pre-discovery observations only
+All *_5D_* weather,included_never,Some values cover days after ignition,Source 5-day window includes post-ignition dates,Exclude from first-report experiments
+FIRE_SIZE / FIRE_SIZE_CLASS,target_only,Final observed outcome,The predicted labels themselves,Exclude from all feature matrices
+CONT_DATE / CONT_TIME / Evacuation / cause categories,included_never,May be resolved after first report,Incident administrative and final-status fields,Verify genuine timestamp before any future use
