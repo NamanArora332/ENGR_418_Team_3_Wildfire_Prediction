@@ -64,17 +64,17 @@ A model may only use what is known **when the fire is reported**. Every column i
 
 | Group | Used as a feature? | Examples |
 | --- | --- | --- |
-| `static` | yes | location, terrain, land cover, human footprint, climate normals, calendar |
-| `weather` | yes, in the `at_discovery` tier | gridMET `vpd`, `erc`, `bi`, `fm100`, wind, `NDVI` on the discovery date |
-| `retrospective` | only in the `retrospective` tier | `*_5D_*` windows that may include days **after** ignition |
+| `static` | yes | location, terrain (point and 1 km), land cover, invasive grasses, suppression difficulty (`SDI`), fire stations nearby, roads, population, SVI summary (`RPL_THEME*`), climate normals, calendar |
+| `weather` | yes, in the `at_discovery` tier | gridMET `vpd`, `erc`, `bi`, `fm100`, wind on the discovery date, their `*_Percentile`, `NDVI`, preparedness levels (`NPL`, `GACC_PL`) |
+| `retrospective` | only in the `retrospective` tier | `*_5D_*` windows that may include days **after** ignition; daily regional counts `GACC_*` (uncontained large fires, teams assigned), which can include **this** fire once it grows; yearly `rpms` |
 | `outcome` | **never** (kept for EDA) | `FIRE_SIZE_CLASS`, `CONT_*` (containment), `NWCG_*CAUSE*`, evacuations |
-| `drop` | **never** (removed) | `MTBS_*` and `ICS_209*` (these exist only for big fires: a hidden size leak), fire names, record IDs |
-| `review` | **never** until a rule is added | anything the rules don't recognise |
+| `drop` | **never** (removed) | `MTBS_*` and `ICS_209*` (these exist only for big fires: a hidden size leak), fire names, record IDs, ~110 census-tract social / environmental-justice indicators |
+| `review` | **never** until a rule is added | anything the rules don't recognise (none in the 2011–2020 files) |
 
 Feature tiers: `static` · `at_discovery` (static + weather, **recommended**) · `retrospective` (adds 5-day windows; report only as an upper bound).
 `feature_columns()` calls `assert_no_leakage()`, so a leaky column cannot slip into a feature list unnoticed.
 
-**After the first real run:** check the `review` list in notebook 01 (section 2) and add a rule for each column worth keeping.
+All 308 columns of the real files are covered by a rule (`tests/fpa_fod_attributes_columns.txt` lists them, and a test checks it). If a new column ever shows up as `review`, add a rule for it in `columns.py`.
 
 ## Running the tests
 

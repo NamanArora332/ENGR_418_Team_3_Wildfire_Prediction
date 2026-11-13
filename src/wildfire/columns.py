@@ -73,24 +73,43 @@ RULES: tuple[Rule, ...] = (
          "LEAK: named fires, complexes and fire codes skew toward large incidents."),
     Rule("drop", r"^(FPA_ID|LOCAL_|SOURCE_SYSTEM$|SOURCE_REPORTING_UNIT|NWCG_REPORTING_UNIT)",
          "Record-keeping identifier with no predictive meaning."),
-    Rule("drop", _exact("FIPS_NAME", "COUNTY", "OBJECTID", "Shape", "geometry") + r"|^Unnamed",
-         "Free text or redundant (use FIPS_CODE / coordinates)."),
+    Rule("drop", _exact("FIPS_NAME", "COUNTY", "OBJECTID", "Shape", "geometry", "TRACT", "NAME",
+                        "LatLong_State", "LatLong_County") + r"|^Unnamed",
+         "Free text, census ID, or duplicate of an existing column (use STATE / FIPS_CODE / coordinates)."),
+    # Census-tract social and environmental-justice indicators (CEJST and SVI parts).
+    # About 110 narrow columns with little link to fire growth; the SVI summary scores
+    # (RPL_THEME*) are kept below instead. Case-sensitive on purpose.
+    Rule("drop", r"(?-i:_PFS$|_ET$|LI$|^M_|^EPL_|^IA|LHSE$|^(TC|CC|CA|NCA|CA_LT20|HSEF|TPF|LHE|SM_C|FPL200S|UI_EXP|THRHLD)$)",
+         "Census-tract social / environmental-justice indicator: too many narrow columns. "
+         "RPL_THEME* keeps the summary."),
     # --- kept for EDA, never a feature ----------------------------------------
     Rule("outcome", r"^(FIRE_SIZE_CLASS|CONT_)", "Only known once the fire is out."),
     Rule("outcome", r"^NWCG_(CAUSE|GENERAL_CAUSE)",
          "Cause is often set by investigation after the fire."),
     Rule("outcome", r"evac", "Evacuations happen because the fire grew."),
-    # --- multi-day windows ------------------------------------------------------
+    # --- research only: may contain information from after ignition -----------
     Rule("retrospective", r"5D", "Multi-day window that may include days after ignition."),
+    Rule("retrospective", r"^GACC_(?!PL$)",
+         "Daily regional counts of new/uncontained large fires and teams assigned. "
+         "These can include THIS fire once it grows."),
+    Rule("retrospective", r"^rpms", "Yearly rangeland production estimate, likely made after the fire season."),
     # --- conditions on the discovery date ------------------------------------
     Rule("weather", _exact(*sorted(GRIDMET_DAILY)), "gridMET value on the discovery date."),
+    Rule("weather", r"_Percentile$", "How extreme the discovery-day weather is versus history."),
     Rule("weather", r"ndvi|(^|_)evi", "Satellite vegetation index near the discovery date."),
-    Rule("weather", r"(^|_)PL($|_)|prepared", "Daily preparedness level (administrative)."),
+    Rule("weather", _exact("NPL") + r"|(^|_)PL($|_)|prepared",
+         "Daily national (NPL) / regional (GACC_PL) preparedness level."),
     # --- known before the fire -------------------------------------------------
     Rule("static", _exact("LATITUDE", "LONGITUDE", "STATE", "FIPS_CODE"), "Location at discovery."),
     Rule("static", _exact("NWCG_REPORTING_AGENCY", "OWNER_DESCR", "SOURCE_SYSTEM_TYPE"),
          "Agency / land owner responsible at discovery."),
-    Rule("static", _exact("Elevation", "Slope", "Aspect", "TRI", "TPI"), "Terrain."),
+    Rule("static", r"^(Elevation|Slope|Aspect|TRI|TPI)(_1km)?$", "Terrain at the point and averaged over 1 km."),
+    Rule("static", _exact("SDI") + r"|^No_FireStation_",
+         "Suppression difficulty index / fire stations nearby: how hard the fire is to reach."),
+    Rule("static", _exact("CheatGrass", "ExoticAnnualGrass", "Medusahead", "PoaSecunda"),
+         "Invasive / annual grass cover: fine fuels that help fire spread."),
+    Rule("static", _exact("GAP_Sts", "GAP_Prity", "Des_Tp", "GDP"), "Land protection status / local economy."),
+    Rule("static", r"^RPL_THEME(S|[1-4])$", "Social Vulnerability Index summary scores (overall + 4 themes)."),
     Rule("static", r"land_?cover|^EV[HCT]|^FRG|fuel", "Land cover / vegetation layer. Check its vintage year."),
     Rule("static", r"normal|^annual_|aridity", "Long-term climate normal."),
     Rule("static", r"^GHM$|pop|road|dist|svi|income|housing", "Human footprint / social context."),
@@ -110,7 +129,8 @@ ENGINEERED: dict[str, tuple[str, str]] = {
 
 
 # Columns that hold category codes even when they look numeric (e.g. land cover 41, 42 ...)
-CATEGORICAL_HINT = r"^(STATE|FIPS_CODE|OWNER_DESCR|NWCG_REPORTING_AGENCY|SOURCE_SYSTEM_TYPE)$|land_?cover|^EVT|^FRG|gacc|mang"
+CATEGORICAL_HINT = (r"^(STATE|FIPS_CODE|OWNER_DESCR|NWCG_REPORTING_AGENCY|SOURCE_SYSTEM_TYPE|GACCAbbrev|GAP_Sts|Des_Tp)$"
+                    r"|land_?cover|^EVT|^FRG|^Mang_|^Ecoregion")
 
 
 def is_categorical_hint(column: str) -> bool:

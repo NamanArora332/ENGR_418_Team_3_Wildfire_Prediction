@@ -45,6 +45,41 @@ def test_known_columns_are_classified(column, group):
     assert classify_column(column)[0] == group
 
 
+REAL_COLUMNS = (Path(__file__).parent / "fpa_fod_attributes_columns.txt").read_text().split("\n")
+REAL_COLUMNS = [c for c in REAL_COLUMNS if c]
+
+
+def test_every_real_column_has_a_rule():
+    """All 308 columns of the real 2020 file are classified; none left for review."""
+    assert len(REAL_COLUMNS) == 308
+    policy = classify_columns(REAL_COLUMNS)
+    assert policy.loc[policy["group"] == "review", "column"].tolist() == []
+
+
+@pytest.mark.parametrize("column, group", [
+    ("GACC_Uncont LF", "retrospective"),   # can count this very fire once it grows
+    ("GACC_Type 1 IMTs", "retrospective"),
+    ("GACC_PL", "weather"),
+    ("NPL", "weather"),
+    ("vpd_Percentile", "weather"),
+    ("rpms", "retrospective"),
+    ("SDI", "static"),
+    ("No_FireStation_5.0km", "static"),
+    ("CheatGrass", "static"),
+    ("Elevation_1km", "static"),
+    ("RPL_THEMES", "static"),
+    ("GACCAbbrev", "static"),
+    ("EPL_POV", "drop"),
+    ("NPL_PFS", "drop"),
+    ("M_HLTH_102", "drop"),
+    ("TRACT", "drop"),
+    ("LatLong_State", "drop"),
+])
+def test_real_column_decisions(column, group):
+    assert column in REAL_COLUMNS
+    assert classify_column(column)[0] == group
+
+
 def test_unknown_column_needs_review():
     assert classify_column("Mystery_attribute")[0] == "review"
 
