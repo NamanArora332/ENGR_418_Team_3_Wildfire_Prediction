@@ -1,0 +1,16 @@
+# Data stays out of Git (it lives in the shared Google Drive folder)
+data/*
+!data/README.md
+*.csv.part
+*.parquet
+
+# Python / Jupyter
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+.venv/
+venv/
+
+# OS
+.DS_Store
