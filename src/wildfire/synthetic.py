@@ -61,6 +61,7 @@ def make_year(year: int, n: int = 2000, seed: int = 0) -> pd.DataFrame:
         "vs": rng.gamma(2, 1.5, n),
         "NDVI-1day": rng.uniform(-0.1, 0.9, n),
         "vpd_Normal": rng.uniform(0.5, 3, n),
+        "vpd_Percentile": rng.choice(["50-70%", ">98%", "<2%", "5-10%", None], n),
         "vpd_5D_mean": vpd + rng.normal(0, 0.2, n),
         "Evacuation": 0,
         "Mystery_attribute": rng.normal(size=n),

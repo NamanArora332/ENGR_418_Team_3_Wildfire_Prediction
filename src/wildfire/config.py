@@ -46,6 +46,10 @@ MISSING_SENTINELS: tuple[float, ...] = (-9999.0, -32768.0)
 # contain 0 (their minimum is 1), so a blank means "no station within that distance".
 FILL_ZERO_PATTERNS: tuple[str, ...] = (r"^No_FireStation_",)
 
+# Columns that store percentile RANGES as text ("50-70%", ">98%"). Each range is
+# replaced by its midpoint (60, 99) so models keep the order.
+PERCENTILE_RANGE_PATTERN = r"_Percentile$"
+
 # Drop columns that are missing for more than this share of fires (useless as inputs).
 MAX_MISSING_SHARE = 0.95
 

@@ -119,6 +119,25 @@ def test_data_quality_fixes(built):
     assert "101" in set(df["EVH"].cat.categories)
 
 
+@pytest.mark.parametrize("text, value", [
+    ("50-70%", 60.0), ("90-95%", 92.5), (">98%", 99.0), ("<2%", 1.0), ("5-10%", 7.5),
+    ("85", 85.0), ("30 - 50%", 40.0), ("unknown", None), (None, None),
+])
+def test_parse_percentile_range(text, value):
+    import math
+    from wildfire.clean import parse_percentile_range
+    got = parse_percentile_range(text)
+    assert math.isnan(got) if value is None else got == value
+
+
+def test_percentile_columns_become_ordered_numbers(built):
+    _, df, policy, report = built
+    assert pd.api.types.is_float_dtype(df["vpd_Percentile"])
+    assert set(df["vpd_Percentile"].dropna().unique()) == {60.0, 99.0, 1.0, 7.5}
+    assert report["percentile_ranges_to_numbers"]["vpd_Percentile"] == []
+    assert "vpd_Percentile" in feature_columns(policy, "at_discovery")
+
+
 def test_no_region_filter_outside_the_west(tmp_path):
     cfg = BuildConfig(states=("TX", "FL"), data_root=tmp_path)
     assert cfg.bbox is None

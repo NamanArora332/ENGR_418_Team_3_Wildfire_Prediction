@@ -7,7 +7,8 @@ Pipeline (each step is logged in build_report.json):
     3. remove duplicate FOD_IDs, rows missing a size, location or date, and rows
        whose coordinates fall outside the chosen region
     4. convert number-like text to numbers, turn -9999-style codes into NaN,
-       fill count columns where blank means zero (fire stations nearby)
+       fill count columns where blank means zero (fire stations nearby),
+       turn percentile ranges ("50-70%") into numbers (60)
     5. drop columns that are empty, constant, or more than 95% missing
     6. add the target (size_class, log_fire_size) and calendar features
     7. write fires_clean.parquet + column_policy.csv + build_report.json
@@ -26,7 +27,7 @@ from .columns import classify_columns, is_categorical_hint
 import re
 
 from .config import (CLASS_NAMES, FILL_ZERO_PATTERNS, MAX_MISSING_SHARE, MISSING_SENTINELS,
-                     SIZE_BINS_ACRES, BuildConfig)
+                     PERCENTILE_RANGE_PATTERN, SIZE_BINS_ACRES, BuildConfig)
 
 REQUIRED = ("FOD_ID", "FIRE_SIZE", "LATITUDE", "LONGITUDE", "STATE")
 
@@ -91,14 +92,41 @@ def drop_invalid_rows(df: pd.DataFrame, report: dict, bbox: dict | None = None) 
     return df
 
 
+_RANGE = re.compile(r"^(\d+(?:\.\d+)?)\s*[-\u2013]\s*(\d+(?:\.\d+)?)%?$")
+_ABOVE = re.compile(r"^>=?\s*(\d+(?:\.\d+)?)%?$")
+_BELOW = re.compile(r"^<=?\s*(\d+(?:\.\d+)?)%?$")
+_PLAIN = re.compile(r"^(\d+(?:\.\d+)?)%?$")
+
+
+def parse_percentile_range(value) -> float:
+    """'50-70%' -> 60.0, '>98%' -> 99.0, '<2%' -> 1.0, '85' -> 85.0, anything else -> NaN."""
+    if value is None or (isinstance(value, float) and np.isnan(value)) or value is pd.NA:
+        return np.nan
+    text = str(value).strip()
+    if m := _RANGE.match(text):
+        return (float(m.group(1)) + float(m.group(2))) / 2
+    if m := _ABOVE.match(text):
+        return (float(m.group(1)) + 100) / 2
+    if m := _BELOW.match(text):
+        return float(m.group(1)) / 2
+    if m := _PLAIN.match(text):
+        return float(m.group(1))
+    return np.nan
+
+
 def fix_types(df: pd.DataFrame, report: dict) -> pd.DataFrame:
     """Numbers stored as text -> numbers; codes -> category; sentinels -> NaN."""
     protected = {"FOD_ID", "DISCOVERY_DATE"}
-    converted, categorical, sentinels = [], [], 0
+    converted, categorical, sentinels, percentiles = [], [], 0, {}
     for col in df.columns:
         if col in protected:
             continue
         s = df[col]
+        if re.search(PERCENTILE_RANGE_PATTERN, col) and not pd.api.types.is_numeric_dtype(s):
+            values = {v: parse_percentile_range(v) for v in s.dropna().unique()}
+            df[col] = s.map(values).astype("float64")
+            percentiles[col] = sorted(str(v) for v, x in values.items() if np.isnan(x))  # unparsed labels
+            continue
         if is_categorical_hint(col):
             if pd.api.types.is_float_dtype(s) and (s.dropna() % 1 == 0).all():
                 s = s.astype("Int64")  # codes like 101.0 -> "101", not "101.0"
@@ -127,6 +155,7 @@ def fix_types(df: pd.DataFrame, report: dict) -> pd.DataFrame:
                 df[col] = df[col].fillna(0)
                 filled[col] = n
     report["missing_filled_with_zero"] = filled
+    report["percentile_ranges_to_numbers"] = percentiles
     report["text_columns_converted_to_numbers"] = converted
     report["categorical_columns"] = categorical
     report["sentinel_values_set_to_nan"] = sentinels
