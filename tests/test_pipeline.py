@@ -102,6 +102,28 @@ def test_rows_are_cleaned(built):
     assert isinstance(df["Land_Cover"].dtype, pd.CategoricalDtype)
 
 
+def test_data_quality_fixes(built):
+    _, df, _, report = built
+    # 1. rows with coordinates outside the western US are removed
+    assert report["removed_outside_region"] > 0
+    assert df["LONGITUDE"].max() <= -101.5
+    # 2. blank fire-station counts mean zero
+    assert df["No_FireStation_5.0km"].notna().all()
+    assert (df["No_FireStation_5.0km"] == 0).any()
+    assert "No_FireStation_5.0km" in report["missing_filled_with_zero"]
+    # 3. columns that are >95% missing are dropped
+    assert "road_interstate_dis" not in df.columns
+    assert "road_interstate_dis" in report["dropped_mostly_empty_columns"]
+    # 4. LANDFIRE height codes are categories, without a trailing ".0"
+    assert isinstance(df["EVH"].dtype, pd.CategoricalDtype)
+    assert "101" in set(df["EVH"].cat.categories)
+
+
+def test_no_region_filter_outside_the_west(tmp_path):
+    cfg = BuildConfig(states=("TX", "FL"), data_root=tmp_path)
+    assert cfg.bbox is None
+
+
 def test_leaky_columns_never_reach_features(built):
     _, df, policy, _ = built
     assert "MTBS_ID" not in df.columns and "FIRE_NAME" not in df.columns

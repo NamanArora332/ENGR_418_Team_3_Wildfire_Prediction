@@ -52,9 +52,11 @@ Notes for modelling:
 | Scope | Years 2011–2020, states AZ CA CO ID MT NM NV OR UT WA WY (change in `src/wildfire/config.py`) |
 | Duplicates | Keep the first row per `FOD_ID` |
 | Invalid rows | Remove rows with missing or negative `FIRE_SIZE`, missing or impossible coordinates, or an unparseable discovery date |
-| Types | Text that holds numbers becomes numbers; code columns (state, land cover …) become categories |
+| Outside region | Remove fires whose coordinates fall outside the western-US box (lon −125.5 to −101.5, lat 30.8 to 49.5): a western `STATE` with eastern coordinates is a data error |
+| Types | Text that holds numbers becomes numbers; code columns (state, land cover, LANDFIRE `EVT`/`EVH`/`EVC` …) become categories |
 | Missing codes | `-9999` and `-32768` become `NaN` |
-| Useless columns | Drop columns that are completely empty or constant |
+| Blank means zero | `No_FireStation_*` blanks become 0. Their smallest recorded value is 1, so a blank means "no station within that distance" |
+| Useless columns | Drop columns that are completely empty, constant, or more than 95% missing (e.g. most `road_*_dis` columns) |
 | Target | `size_class` from final acres: under 10 Small, 10–299.99 Medium, 300+ Large (NWCG classes A–B, C–D, E–G) |
 | New features | `doy_sin`, `doy_cos`, `month`, `weekday`, `discovery_hour` |
 

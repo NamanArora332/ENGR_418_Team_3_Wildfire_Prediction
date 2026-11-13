@@ -130,7 +130,7 @@ ENGINEERED: dict[str, tuple[str, str]] = {
 
 # Columns that hold category codes even when they look numeric (e.g. land cover 41, 42 ...)
 CATEGORICAL_HINT = (r"^(STATE|FIPS_CODE|OWNER_DESCR|NWCG_REPORTING_AGENCY|SOURCE_SYSTEM_TYPE|GACCAbbrev|GAP_Sts|Des_Tp)$"
-                    r"|land_?cover|^EVT|^FRG|^Mang_|^Ecoregion")
+                    r"|land_?cover|^EV[HCT]|^FRG|^Mang_|^Ecoregion")  # EVH/EVC are LANDFIRE class codes too
 
 
 def is_categorical_hint(column: str) -> bool:

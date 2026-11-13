@@ -43,13 +43,16 @@ def make_year(year: int, n: int = 2000, seed: int = 0) -> pd.DataFrame:
         "FIRE_SIZE": size,
         "FIRE_SIZE_CLASS": pd.cut(size, [-1, 0.25, 10, 100, 300, 1000, 5000, np.inf], labels=list("ABCDEFG")).astype(str),
         "LATITUDE": rng.uniform(32, 49, n),
-        "LONGITUDE": rng.uniform(-124, -100, n),
+        "LONGITUDE": rng.uniform(-124, -103, n),
         "STATE": rng.choice(STATES, n),
         "OWNER_DESCR": rng.choice(["USFS", "PRIVATE", "BLM"], n),
         "Elevation": rng.uniform(0, 3000, n),
         "Slope": slope,
         "Aspect": rng.uniform(0, 360, n),
         "Land_Cover": rng.choice([41, 42, 52, 71], n),
+        "EVH": rng.choice([25, 101, 103, 205, 305], n),
+        "No_FireStation_5.0km": rng.choice([np.nan, np.nan, 1, 2, 4], n),  # blank = no station
+        "road_interstate_dis": np.where(rng.random(n) < 0.01, rng.uniform(0, 5000, n), np.nan),
         "GHM": rng.uniform(0, 1, n),
         "vpd": vpd,
         "erc": erc,
@@ -66,6 +69,7 @@ def make_year(year: int, n: int = 2000, seed: int = 0) -> pd.DataFrame:
     df.loc[df.sample(frac=0.02, random_state=1).index, "Elevation"] = -9999
     df.loc[df.sample(frac=0.01, random_state=2).index, "FIRE_SIZE"] = -1
     df["GHM"] = df["GHM"].round(3).astype(str)  # numbers stored as text
+    df.loc[df.index[10:13], "LONGITUDE"] = -77.0  # western state, eastern coordinates
     return pd.concat([df, df.head(5)], ignore_index=True)  # 5 duplicate FOD_IDs
 
 

@@ -19,6 +19,9 @@ RAW_FILE_TEMPLATE = "{year}_FPA_FOD_cons.csv"  # one CSV per fire year, 1992-202
 # --- Scope --------------------------------------------------------------------
 # Western US, where most large fires burn. Change to None for all of CONUS.
 WESTERN_STATES: tuple[str, ...] = ("AZ", "CA", "CO", "ID", "MT", "NM", "NV", "OR", "UT", "WA", "WY")
+# Box around those states (lon, lat ranges, with a small margin). Fires whose
+# coordinates fall outside it have a wrong state or wrong coordinates.
+WESTERN_BBOX: dict[str, tuple[float, float]] = {"lon": (-125.5, -101.5), "lat": (30.8, 49.5)}
 # Ten most recent years: enough for a train/validation/test split by year
 # while keeping the download to roughly 2 GB.
 DEFAULT_YEARS: tuple[int, ...] = tuple(range(2011, 2021))
@@ -38,6 +41,13 @@ CLASS_NAMES: tuple[str, ...] = ("Small", "Medium", "Large")
 
 # Values used in the attribute columns to mean "no data".
 MISSING_SENTINELS: tuple[float, ...] = (-9999.0, -32768.0)
+
+# Count columns where "missing" really means zero. The fire-station counts never
+# contain 0 (their minimum is 1), so a blank means "no station within that distance".
+FILL_ZERO_PATTERNS: tuple[str, ...] = (r"^No_FireStation_",)
+
+# Drop columns that are missing for more than this share of fires (useless as inputs).
+MAX_MISSING_SHARE = 0.95
 
 # --- Locations ----------------------------------------------------------------
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -67,10 +77,15 @@ class BuildConfig:
     states: tuple[str, ...] | None = WESTERN_STATES
     data_root: Path = field(default_factory=default_data_root)
     raw_dir: Path | None = None  # defaults to <data_root>/raw
+    # Coordinate box. "auto" = WESTERN_BBOX when all chosen states are western, else none.
+    bbox: dict | str | None = "auto"
 
     def __post_init__(self) -> None:
         self.data_root = Path(self.data_root)
         self.raw_dir = Path(self.raw_dir) if self.raw_dir else self.data_root / "raw"
+        if self.bbox == "auto":
+            western = self.states and set(self.states) <= set(WESTERN_STATES)
+            self.bbox = WESTERN_BBOX if western else None
 
     @property
     def clean_path(self) -> Path:

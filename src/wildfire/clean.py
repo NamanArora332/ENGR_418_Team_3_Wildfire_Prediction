@@ -4,9 +4,11 @@ Pipeline (each step is logged in build_report.json):
 
     1. read each year's CSV, keep the chosen states, drop 'drop'-group columns
     2. stack the years
-    3. remove duplicate FOD_IDs and rows missing a size, location or date
-    4. convert number-like text to numbers, turn -9999-style codes into NaN
-    5. drop columns that are empty or constant
+    3. remove duplicate FOD_IDs, rows missing a size, location or date, and rows
+       whose coordinates fall outside the chosen region
+    4. convert number-like text to numbers, turn -9999-style codes into NaN,
+       fill count columns where blank means zero (fire stations nearby)
+    5. drop columns that are empty, constant, or more than 95% missing
     6. add the target (size_class, log_fire_size) and calendar features
     7. write fires_clean.parquet + column_policy.csv + build_report.json
 """
@@ -21,7 +23,10 @@ import numpy as np
 import pandas as pd
 
 from .columns import classify_columns, is_categorical_hint
-from .config import CLASS_NAMES, MISSING_SENTINELS, SIZE_BINS_ACRES, BuildConfig
+import re
+
+from .config import (CLASS_NAMES, FILL_ZERO_PATTERNS, MAX_MISSING_SHARE, MISSING_SENTINELS,
+                     SIZE_BINS_ACRES, BuildConfig)
 
 REQUIRED = ("FOD_ID", "FIRE_SIZE", "LATITUDE", "LONGITUDE", "STATE")
 
@@ -57,7 +62,7 @@ def parse_discovery_date(df: pd.DataFrame) -> pd.Series:
     return date
 
 
-def drop_invalid_rows(df: pd.DataFrame, report: dict) -> pd.DataFrame:
+def drop_invalid_rows(df: pd.DataFrame, report: dict, bbox: dict | None = None) -> pd.DataFrame:
     n0 = len(df)
     df = df.drop_duplicates(subset="FOD_ID", keep="first")
     report["removed_duplicate_fod_id"] = n0 - len(df)
@@ -72,6 +77,13 @@ def drop_invalid_rows(df: pd.DataFrame, report: dict) -> pd.DataFrame:
     bad_loc = lat.isna() | lon.isna() | ~lat.between(18, 72) | ~lon.between(-180, -60)
     report["removed_bad_location"] = int(bad_loc.sum())
     df = df[~bad_loc].assign(LATITUDE=lat[~bad_loc], LONGITUDE=lon[~bad_loc])
+
+    if bbox:
+        outside = ~(df["LONGITUDE"].between(*bbox["lon"]) & df["LATITUDE"].between(*bbox["lat"]))
+        report["removed_outside_region"] = int(outside.sum())
+        df = df[~outside]
+    else:
+        report["removed_outside_region"] = 0
 
     date = parse_discovery_date(df)
     report["removed_bad_date"] = int(date.isna().sum())
@@ -88,6 +100,8 @@ def fix_types(df: pd.DataFrame, report: dict) -> pd.DataFrame:
             continue
         s = df[col]
         if is_categorical_hint(col):
+            if pd.api.types.is_float_dtype(s) and (s.dropna() % 1 == 0).all():
+                s = s.astype("Int64")  # codes like 101.0 -> "101", not "101.0"
             df[col] = s.astype("string").str.strip().replace({"": pd.NA, "nan": pd.NA}).astype("category")
             categorical.append(col)
             continue
@@ -105,6 +119,14 @@ def fix_types(df: pd.DataFrame, report: dict) -> pd.DataFrame:
         if mask.any():
             sentinels += int(mask.sum())
             df[col] = df[col].mask(mask)
+    filled = {}
+    for col in df.columns:
+        if any(re.search(p, col) for p in FILL_ZERO_PATTERNS) and pd.api.types.is_numeric_dtype(df[col]):
+            n = int(df[col].isna().sum())
+            if n:
+                df[col] = df[col].fillna(0)
+                filled[col] = n
+    report["missing_filled_with_zero"] = filled
     report["text_columns_converted_to_numbers"] = converted
     report["categorical_columns"] = categorical
     report["sentinel_values_set_to_nan"] = sentinels
@@ -115,9 +137,12 @@ def drop_useless_columns(df: pd.DataFrame, report: dict) -> pd.DataFrame:
     keep_always = {"FOD_ID", "FIRE_SIZE", "DISCOVERY_DATE", "FIRE_YEAR"}
     empty = [c for c in df.columns if c not in keep_always and df[c].isna().all()]
     constant = [c for c in df.columns if c not in keep_always and c not in empty and df[c].nunique(dropna=True) <= 1]
+    mostly_empty = [c for c in df.columns if c not in keep_always and c not in empty + constant
+                    and df[c].isna().mean() > MAX_MISSING_SHARE]
     report["dropped_empty_columns"] = empty
     report["dropped_constant_columns"] = constant
-    return df.drop(columns=empty + constant)
+    report["dropped_mostly_empty_columns"] = mostly_empty
+    return df.drop(columns=empty + constant + mostly_empty)
 
 
 # --- 6. target and engineered features -----------------------------------------
@@ -170,6 +195,7 @@ def build_dataset(cfg: BuildConfig, write: bool = True) -> tuple[pd.DataFrame, p
         "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "years": list(cfg.years),
         "states": list(cfg.states) if cfg.states else "all",
+        "bbox": cfg.bbox,
         "size_bins_acres": list(SIZE_BINS_ACRES),
         "per_year": [],
     }
@@ -185,7 +211,7 @@ def build_dataset(cfg: BuildConfig, write: bool = True) -> tuple[pd.DataFrame, p
 
     df = pd.concat(frames, ignore_index=True)
     report["rows_after_state_filter"] = len(df)
-    df = drop_invalid_rows(df, report)
+    df = drop_invalid_rows(df, report, cfg.bbox)
     df = fix_types(df, report)
     df = drop_useless_columns(df, report)
     df = add_target(df)
